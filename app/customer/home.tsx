@@ -303,6 +303,25 @@ export default function CustomerHome() {
         <Text style={styles.customerName}>{profile?.full_name}</Text>
         <Text style={styles.carInfo}>Car: {profile?.car_type}</Text>
         <Text style={styles.phone}>Phone: {profile?.phone}</Text>
+
+        // In the Customer Home actions section, update:
+<View style={styles.actionsRow}>
+  <TouchableOpacity 
+    style={styles.actionButton}
+    onPress={() => router.push("/customer/profile")}
+  >
+    <Text style={styles.actionIcon}>👤</Text>
+    <Text style={styles.actionText}>My Profile</Text>
+  </TouchableOpacity>
+  
+  <TouchableOpacity 
+    style={styles.actionButton}
+    onPress={updateCustomerLocation}
+  >
+    <Text style={styles.actionIcon}>📍</Text>
+    <Text style={styles.actionText}>Update Location</Text>
+  </TouchableOpacity>
+</View>
         
         {/* Location Status */}
         <View style={styles.locationSection}>

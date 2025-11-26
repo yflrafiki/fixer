@@ -1,17 +1,16 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../utils/supabase";
-import { View, Text, Button, TouchableOpacity, StyleSheet, Alert, ScrollView, RefreshControl } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Alert, ScrollView, RefreshControl } from "react-native";
 import { useAuth } from "../../context/AuthContext";
 import { useRouter } from "expo-router";
 import * as Location from 'expo-location';
 
 export default function Dashboard() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, profile } = useAuth(); // Get profile from AuthContext
   const [requests, setRequests] = useState([]);
   const [mechanicLocation, setMechanicLocation] = useState(null);
   const [mechanicAddress, setMechanicAddress] = useState("");
-  const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -63,15 +62,6 @@ export default function Dashboard() {
           longitude: coords.longitude,
         })
         .eq('id', user.id);
-
-      // Get mechanic profile
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      setProfile(profileData);
 
       // Get pending requests for this mechanic with customer details
       await loadRequests();
@@ -266,15 +256,43 @@ export default function Dashboard() {
       
       {/* Mechanic Details */}
       <View style={styles.profileSection}>
-        <Text style={styles.sectionTitle}>Your Details</Text>
-        <Text style={styles.detailText}>Name: {profile?.full_name}</Text>
-        <Text style={styles.detailText}>Service: {profile?.service_type}</Text>
-        <Text style={styles.detailText}>Phone: {profile?.phone}</Text>
+        <View style={styles.profileHeader}>
+          <Text style={styles.sectionTitle}>Your Details</Text>
+          <TouchableOpacity 
+            style={styles.editProfileButton}
+            onPress={() => router.push("/mechanic/profile")}
+          >
+            <Text style={styles.editProfileText}>Edit Profile</Text>
+          </TouchableOpacity>
+        </View>
+        
+        <Text style={styles.detailText}>Name: {profile?.full_name || 'Not set'}</Text>
+        <Text style={styles.detailText}>Service: {profile?.service_type || 'Not set'}</Text>
+        <Text style={styles.detailText}>Phone: {profile?.phone || 'Not set'}</Text>
+        <Text style={styles.detailText}>Email: {user?.email}</Text>
+        
         {mechanicAddress ? (
           <Text style={styles.addressText}>📍 {mechanicAddress}</Text>
         ) : (
           <Text style={styles.detailText}>Location: Getting address...</Text>
         )}
+      </View>
+
+      {/* Quick Stats */}
+      <View style={styles.statsSection}>
+        <Text style={styles.sectionTitle}>Quick Stats</Text>
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{requests.length}</Text>
+            <Text style={styles.statLabel}>Pending Requests</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>
+              {requests.filter(req => req.status === 'accepted').length}
+            </Text>
+            <Text style={styles.statLabel}>Accepted</Text>
+          </View>
+        </View>
       </View>
 
       {/* Incoming Requests */}
@@ -335,6 +353,28 @@ export default function Dashboard() {
           ))
         )}
       </View>
+
+      {/* Quick Actions */}
+      <View style={styles.actionsSection}>
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <View style={styles.actionsRow}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={loadMechanicData}
+          >
+            <Text style={styles.actionIcon}>🔄</Text>
+            <Text style={styles.actionText}>Refresh</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => router.push("/mechanic/profile")}
+          >
+            <Text style={styles.actionIcon}>👤</Text>
+            <Text style={styles.actionText}>My Profile</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     </ScrollView>
   );
 }
@@ -362,6 +402,58 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  profileHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  editProfileButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  editProfileText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  statsSection: {
+    backgroundColor: 'white',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginHorizontal: 5,
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#007AFF',
+    marginBottom: 5,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
   },
   requestsSection: {
     marginBottom: 20,
@@ -460,5 +552,34 @@ const styles = StyleSheet.create({
     color: '#999',
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  actionsSection: {
+    marginBottom: 20,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  actionButton: {
+    backgroundColor: 'white',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    flex: 1,
+    marginHorizontal: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  actionIcon: {
+    fontSize: 20,
+    marginBottom: 5,
+  },
+  actionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
   },
 });

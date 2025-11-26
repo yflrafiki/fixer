@@ -7,6 +7,7 @@ type AuthContextType = {
   loading: boolean;
   signOut: () => Promise<void>;
   profile: any | null;
+  refreshProfile: () => Promise<void>; // Add this function
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -16,6 +17,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+
+  // Function to refresh profile data
+  const refreshProfile = async () => {
+    if (!user) return;
+    
+    try {
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      
+      setProfile(profileData);
+    } catch (error) {
+      console.error('Error refreshing profile:', error);
+    }
+  };
 
   useEffect(() => {
     // Get initial session
@@ -82,7 +100,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signOut, profile }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      signOut, 
+      profile,
+      refreshProfile // Add this to the context
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -4,6 +4,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
 import { supabase } from "../../utils/supabase";
 import * as FileSystem from 'expo-file-system';
+import * as Location from 'expo-location'; // Add this import
 
 export default function Signup() {
   const { role } = useLocalSearchParams();
@@ -42,7 +43,6 @@ export default function Signup() {
 
   const uploadImage = async (uri: string, fileName: string) => {
     try {
-      // Method 1: Using FileSystem to read as base64 (most reliable)
       console.log('Reading image file...');
       const fileInfo = await FileSystem.getInfoAsync(uri);
       
@@ -108,88 +108,93 @@ export default function Signup() {
     setLoading(true);
     
     try {
-    // Get customer location first
-    let customerLatitude = null;
-    let customerLongitude = null;
-    
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const location = await Location.getCurrentPositionAsync({});
-        customerLatitude = location.coords.latitude;
-        customerLongitude = location.coords.longitude;
-        console.log('📍 Customer location captured:', { customerLatitude, customerLongitude });
+      // Get user location (for both customer and mechanic)
+      let userLatitude = null;
+      let userLongitude = null;
+      
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const location = await Location.getCurrentPositionAsync({});
+          userLatitude = location.coords.latitude;
+          userLongitude = location.coords.longitude;
+          console.log('📍 User location captured:', { userLatitude, userLongitude });
+        }
+      } catch (locationError) {
+        console.log('⚠️ Could not get user location during signup:', locationError);
+        // Continue without location - it's not critical for signup
       }
-    } catch (locationError) {
-      console.log('⚠️ Could not get customer location during signup:', locationError);
-      // Continue without location - it's not critical for signup
-    }
 
-    // Sign up with email and password
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email: email.trim().toLowerCase(),
-      password: password,
-      options: {
-        data: {
-          phone: phone,
-          full_name: full_name,
-          role: role
+      // Sign up with email and password
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password: password,
+        options: {
+          data: {
+            phone: phone,
+            full_name: full_name,
+            role: role
+          }
+        }
+      });
+
+      if (signUpError) {
+        Alert.alert("Signup Failed", signUpError.message);
+        return;
+      }
+
+      if (!data.user) {
+        Alert.alert("Signup Failed", "No user data returned");
+        return;
+      }
+
+      let avatarUrl = "";
+
+      // Upload profile picture if selected
+      if (image) {
+        try {
+          const fileName = `avatar_${data.user.id}_${Date.now()}.jpg`;
+          avatarUrl = await uploadImage(image, fileName);
+        } catch (uploadError) {
+          console.error('Image upload failed:', uploadError);
+          Alert.alert("Warning", "Profile picture upload failed, but account was created. You can update your picture later.");
         }
       }
-    });
 
-    if (signUpError || !data.user) {
-      alert("Signup failed");
-      return;
-    }
+      // Create profile in the database - INCLUDING LOCATION
+      const { error: profileError } = await supabase.from("profiles").insert({
+        id: data.user.id,
+        role,
+        full_name: full_name.trim(),
+        phone: phone.trim(),
+        avatar_url: avatarUrl,
+        car_type: role === "customer" ? carType.trim() : null,
+        service_type: role === "mechanic" ? serviceType.trim() : null,
+        latitude: userLatitude, // Save user location
+        longitude: userLongitude, // Save user location
+      });
 
-    let avatarUrl = "";
-
-    // Upload profile picture if selected
-    if (image) {
-      try {
-        const fileName = `avatar_${data.user.id}_${Date.now()}.jpg`;
-        avatarUrl = await uploadImage(image, fileName);
-      } catch (uploadError) {
-        console.error('Image upload failed:', uploadError);
-        alert("Profile picture upload failed, but account was created.");
+      if (profileError) {
+        console.error('Profile error:', profileError);
+        Alert.alert("Profile Error", "Failed to save profile: " + profileError.message);
+        return;
       }
-    }
 
-    // Create profile in the database - INCLUDING LOCATION
-    const { error: profileError } = await supabase.from("profiles").insert({
-      id: data.user.id,
-      role,
-      full_name: full_name.trim(),
-      phone: phone.trim(),
-      avatar_url: avatarUrl,
-      car_type: role === "customer" ? carType.trim() : null,
-      service_type: role === "mechanic" ? serviceType.trim() : null,
-      latitude: customerLatitude, // Save customer location
-      longitude: customerLongitude, // Save customer location
-    });
-
-    if (profileError) {
-      console.error('Profile error:', profileError);
-      alert("Failed to save profile");
-      return;
+      Alert.alert("Success", "Account created successfully!");
+      
+      if (role === "customer") {
+        router.replace("/customer/home");
+      } else {
+        router.replace("/mechanic/dashboard");
+      }
+      
+    } catch (error: any) {
+      console.error("Signup error:", error);
+      Alert.alert("Error", "An unexpected error occurred: " + error.message);
+    } finally {
+      setLoading(false);
     }
-
-    alert("Account created successfully!");
-    
-    if (role === "customer") {
-      router.replace("/customer/home");
-    } else {
-      router.replace("/mechanic/dashboard");
-    }
-    
-  } catch (error: any) {
-    console.error("Signup error:", error);
-    alert("An unexpected error occurred");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   return (
     <View style={{ padding: 20, marginTop: 50, flex: 1 }}>
