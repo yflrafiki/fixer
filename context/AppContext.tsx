@@ -17,6 +17,7 @@ interface AppContextType {
   addMessage: (message: Message) => void;
   addReview: (review: Review) => void;
   isInitialized: boolean;
+  refreshMechanics: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -27,142 +28,215 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
-  const [currentUser, setCurrentUser] = useState<Customer | Mechanic | null>(null);
+  const [currentUser, setCurrentUserState] = useState<Customer | Mechanic | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Load data from storage on app start
+  // ---------------------------------------------------------
+  // 🚀 STARTUP LOAD
+  // ---------------------------------------------------------
   useEffect(() => {
-    loadDataFromStorage();
+    loadAllData();
   }, []);
 
-  const loadDataFromStorage = async () => {
+  // ---------------------------------------------------------
+  // 🛠 MECHANIC DATA SANITY CHECKER
+  // ---------------------------------------------------------
+  const fixMechanicData = (data: any[]): Mechanic[] => {
+    console.log("🛠 Checking mechanic storage integrity...");
+
+    if (!data || data.length === 0) return [];
+
+    if (typeof data[0] === "string") {
+      console.log("⚠️ OLD INVALID STRING MECHANIC ARRAY FOUND — clearing...");
+      return [];
+    }
+
+    console.log("✅ Mechanics are valid.");
+    return data as Mechanic[];
+  };
+
+  // ---------------------------------------------------------
+  // 📥 LOAD ALL DATA
+  // ---------------------------------------------------------
+  const loadAllData = async () => {
     try {
-      console.log('Loading data from storage...');
-      
-      // Load current user
-      const storedUser = await AsyncStorage.getItem('currentUser');
+      console.log("🔧 Loading app data...");
+
+      const storedUser = await AsyncStorage.getItem("currentUser");
       if (storedUser) {
-        const userData = JSON.parse(storedUser);
-        console.log('Loaded current user from storage:', userData);
-        setCurrentUser(userData);
+        const user = JSON.parse(storedUser);
+        setCurrentUserState(user);
+        console.log("👤 Current user loaded:", user.fullName);
       }
 
-      // Load customers
-      const storedCustomers = await AsyncStorage.getItem('customers');
+      const storedCustomers = await AsyncStorage.getItem("customers");
       if (storedCustomers) {
-        const customersData = JSON.parse(storedCustomers);
-        console.log('Loaded customers from storage:', customersData.length);
-        setCustomers(customersData);
+        const list = JSON.parse(storedCustomers);
+        setCustomers(list);
+        console.log("👥 Customers loaded:", list.length);
       }
 
-      // Load demo mechanics
-      const demoMechanics: Mechanic[] = [
-        {
-          id: 'm1',
-          fullName: 'John Mechanic',
-          phone: '+1234567890',
-          email: 'john@example.com',
-          services: ['Engine Repair', 'Brake Service', 'Oil Change'],
-          location: { latitude: 37.7749, longitude: -122.4194 },
-          isAvailable: true,
-          rating: 4.8,
-          reviews: [],
-          experience: 5,
-          hourlyRate: 75,
-          totalJobs: 127,
-          specialization: ['German Cars', 'Japanese Cars'],
-          verificationStatus: 'verified',
-          userType: 'mechanic',
-          createdAt: new Date(),
-        },
-        {
-          id: 'm2',
-          fullName: 'Sarah Technician',
-          phone: '+1234567891',
-          email: 'sarah@example.com',
-          services: ['Tire Service', 'AC Repair', 'Electrical'],
-          location: { latitude: 37.7849, longitude: -122.4094 },
-          isAvailable: true,
-          rating: 4.9,
-          reviews: [],
-          experience: 8,
-          hourlyRate: 85,
-          totalJobs: 203,
-          specialization: ['Electrical Systems', 'AC Systems'],
-          verificationStatus: 'verified',
-          userType: 'mechanic',
-          createdAt: new Date(),
-        },
-      ];
+      await loadMechanicsFromStorage();
 
-      setMechanics(demoMechanics);
+      const storedRequests = await AsyncStorage.getItem("requests");
+      if (storedRequests) setRequests(JSON.parse(storedRequests));
+
+      const storedMessages = await AsyncStorage.getItem("messages");
+      if (storedMessages) setMessages(JSON.parse(storedMessages));
+
+      const storedReviews = await AsyncStorage.getItem("reviews");
+      if (storedReviews) setReviews(JSON.parse(storedReviews));
+
       setIsInitialized(true);
-      console.log('App context initialized successfully');
-      
-    } catch (error) {
-      console.error('Error loading data from storage:', error);
+      console.log("✅ App fully initialized");
+    } catch (err) {
+      console.error("❌ Error during initialization:", err);
       setIsInitialized(true);
     }
   };
 
-  const addCustomer = (customer: Customer) => {
-    console.log('Adding customer:', customer);
-    setCustomers(prev => {
-      const newCustomers = [...prev, customer];
-      console.log('Customers after add:', newCustomers.length);
-      return newCustomers;
-    });
+  // ---------------------------------------------------------
+  // 📥 LOAD + AUTO-FIX MECHANICS
+  // ---------------------------------------------------------
+  const loadMechanicsFromStorage = async () => {
+    try {
+      const stored = await AsyncStorage.getItem("mechanics");
+      console.log("🔍 RAW MECHANICS STORAGE:", stored);
+
+      if (!stored) {
+        setMechanics([]);
+        return;
+      }
+
+      let parsed = JSON.parse(stored);
+
+      parsed = fixMechanicData(parsed);
+
+      if (parsed.length === 0) {
+        await AsyncStorage.setItem("mechanics", JSON.stringify([]));
+      }
+
+      setMechanics(parsed);
+      console.log("✅ Mechanics loaded:", parsed.length);
+    } catch (err) {
+      console.error("❌ Error loading mechanics:", err);
+    }
   };
 
-  const addMechanic = (mechanic: Mechanic) => {
-    console.log('Adding mechanic:', mechanic);
-    setMechanics(prev => [...prev, mechanic]);
+  // ---------------------------------------------------------
+  // 👤 SAVE CURRENT USER
+  // ---------------------------------------------------------
+  const setCurrentUser = async (user: Customer | Mechanic | null) => {
+    setCurrentUserState(user);
+
+    if (user) {
+      await AsyncStorage.setItem("currentUser", JSON.stringify(user));
+    } else {
+      await AsyncStorage.removeItem("currentUser");
+    }
   };
 
-  const addRequest = (request: ServiceRequest) => {
-    setRequests(prev => [...prev, request]);
+  // ---------------------------------------------------------
+  // ➕ ADD CUSTOMER
+  // ---------------------------------------------------------
+  const addCustomer = async (customer: Customer) => {
+    const updated = [...customers, customer];
+    setCustomers(updated);
+    await AsyncStorage.setItem("customers", JSON.stringify(updated));
   };
 
-  const updateRequest = (requestId: string, updates: Partial<ServiceRequest>) => {
-    setRequests(prev => prev.map(req => 
-      req.id === requestId ? { ...req, ...updates } : req
-    ));
+  // ---------------------------------------------------------
+  // 🛠 ADD MECHANIC
+  // ---------------------------------------------------------
+  const addMechanic = async (mechanic: Mechanic) => {
+    console.log("🛠 Adding mechanic:", mechanic.fullName);
+
+    try {
+      const stored = await AsyncStorage.getItem("mechanics");
+      let list = stored ? JSON.parse(stored) : [];
+
+      list = fixMechanicData(list);
+
+      const updated = [...list, mechanic];
+
+      await AsyncStorage.setItem("mechanics", JSON.stringify(updated));
+      setMechanics(updated);
+
+      console.log("✅ Mechanic saved:", mechanic.fullName);
+      return true;
+    } catch (err) {
+      console.error("❌ Error adding mechanic:", err);
+      return false;
+    }
   };
 
-  const addMessage = (message: Message) => {
-    setMessages(prev => [...prev, message]);
+  // ---------------------------------------------------------
+  // REQUESTS / MESSAGES / REVIEWS
+  // ---------------------------------------------------------
+  const addRequest = async (request: ServiceRequest) => {
+    const updated = [...requests, request];
+    setRequests(updated);
+    await AsyncStorage.setItem("requests", JSON.stringify(updated));
   };
 
-  const addReview = (review: Review) => {
-    setReviews(prev => [...prev, review]);
+  const updateRequest = async (requestId: string, updates: Partial<ServiceRequest>) => {
+    const updated = requests.map(r =>
+      r.id === requestId ? { ...r, ...updates } : r
+    );
+    setRequests(updated);
+    await AsyncStorage.setItem("requests", JSON.stringify(updated));
   };
 
+  const addMessage = async (message: Message) => {
+    const updated = [...messages, message];
+    setMessages(updated);
+    await AsyncStorage.setItem("messages", JSON.stringify(updated));
+  };
+
+  const addReview = async (review: Review) => {
+    const updated = [...reviews, review];
+    setReviews(updated);
+    await AsyncStorage.setItem("reviews", JSON.stringify(updated));
+  };
+
+  // ---------------------------------------------------------
+  // 🔄 REFRESH MECHANICS
+  // ---------------------------------------------------------
+  const refreshMechanics = async () => {
+    console.log("🔄 Refreshing mechanics...");
+    await loadMechanicsFromStorage();
+  };
+
+  // ---------------------------------------------------------
+  // PROVIDER
+  // ---------------------------------------------------------
   return (
-    <AppContext.Provider value={{
-      customers,
-      mechanics,
-      requests,
-      messages,
-      reviews,
-      currentUser,
-      setCurrentUser,
-      addCustomer,
-      addMechanic,
-      addRequest,
-      updateRequest,
-      addMessage,
-      addReview,
-      isInitialized,
-    }}>
+    <AppContext.Provider
+      value={{
+        customers,
+        mechanics,
+        requests,
+        messages,
+        reviews,
+        currentUser,
+        setCurrentUser,
+        addCustomer,
+        addMechanic,
+        addRequest,
+        updateRequest,
+        addMessage,
+        addReview,
+        isInitialized,
+        refreshMechanics,
+      }}
+    >
       {children}
     </AppContext.Provider>
   );
 };
 
 export const useApp = () => {
-  const context = useContext(AppContext);
-  if (context === undefined) {
-    throw new Error('useApp must be used within an AppProvider');
-  }
-  return context;
+  const ctx = useContext(AppContext);
+  if (!ctx) throw new Error("useApp must be used inside AppProvider");
+  return ctx;
 };

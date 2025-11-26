@@ -1,19 +1,34 @@
-import { Stack } from 'expo-router';
-import { AppProvider } from '../context/AppContext';
+import { Stack } from "expo-router";
+import { AppProvider } from "../context/AppContext";
+import { AuthProvider } from "../context/AuthContext";
 
 export default function RootLayout() {
   return (
-    <AppProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="login" />
-        <Stack.Screen name="customer-signup" />
-        <Stack.Screen name="mechanic-signup" />
-        <Stack.Screen name="customer-home" />
-        <Stack.Screen name="mechanic-home" />
-        <Stack.Screen name="chat/[requestId]" />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-    </AppProvider>
+    <AuthProvider>
+      <AppProvider>
+        <Stack
+          screenOptions={{ headerShown: false }}
+          initialRouteName="auth/choose-role"
+        >
+          {/* AUTH SCREENS */}
+          <Stack.Screen name="auth/choose-role" />
+          <Stack.Screen name="auth/login" />
+          <Stack.Screen name="auth/signup" />
+
+          {/* CUSTOMER SCREENS */}
+          <Stack.Screen name="customer/home" />
+          <Stack.Screen name="customer/chat" />
+          <Stack.Screen name="customer/mechanic-details" />
+
+          {/* MECHANIC SCREENS */}
+          <Stack.Screen name="mechanic/dashboard" />
+          <Stack.Screen name="mechanic/request" />
+          <Stack.Screen name="mechanic/chat" />
+
+          {/* INDEX (if you ever use it) */}
+          <Stack.Screen name="index" />
+        </Stack>
+      </AppProvider>
+    </AuthProvider>
   );
 }

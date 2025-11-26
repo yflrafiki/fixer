@@ -97,3 +97,24 @@ export interface Notification {
   read: boolean;
   createdAt: Date;
 }
+
+export interface EditableUserFields {
+  fullName?: string;
+  phone?: string;
+  email?: string;
+}
+
+export interface EditableCustomerFields extends EditableUserFields {
+  carType?: string;
+  carPhoto?: string;
+  licensePlate?: string;
+  location?: Location;
+}
+
+export interface EditableMechanicFields extends EditableUserFields {
+  services: string[];
+  experience: number;
+  hourlyRate: number;
+  specialization: string[];
+  description?: string;
+}
